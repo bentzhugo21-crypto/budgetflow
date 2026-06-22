@@ -1,4 +1,4 @@
-const CACHE = "budgetflow-v1";
+const CACHE = "budgetflow-v2";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg",
   "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
@@ -14,10 +14,11 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
+  if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;          // laisse passer Supabase / CDN
   e.respondWith(
-    fetch(e.request)                                     // réseau d'abord = toujours à jour
+    fetch(e.request, { cache: "no-store" })            // réseau frais, IGNORE le cache du navigateur
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
