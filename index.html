@@ -183,6 +183,18 @@
       </div>
     </div>
 
+    <div class="card">
+      <h2>💾 Sauvegarde des données <span class="sub">export / import</span></h2>
+      <p class="muted small" style="margin-bottom:12px">
+        Vos données sont déjà synchronisées sur votre compte (cloud). Vous pouvez aussi les exporter dans un
+        fichier comme sauvegarde supplémentaire, ou les réimporter sur un autre support.</p>
+      <div class="inline-actions">
+        <button class="btn" id="exportBtn">⬇️ Exporter mes données</button>
+        <button class="btn ghost" id="importBtn">⬆️ Importer un fichier</button>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      </div>
+      <div id="backupInfo" class="muted small" style="margin-top:10px"></div>
+    </div>
   </section>
 
   <!-- ============ EXPENSES ============ -->
@@ -1100,6 +1112,46 @@ function bindMonthNav(){
   if(rec) rec.onclick = doRecover;
   if(recX) recX.onclick = ()=>{ recoveryDismissed = true; renderDash(); };
 }
+
+/* ============================================================
+   SAUVEGARDE — export / import des données
+   ============================================================ */
+document.getElementById("exportBtn").onclick = ()=>{
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "budgetflow-sauvegarde-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  document.getElementById("backupInfo").innerHTML = "✅ Fichier exporté. Conservez-le en lieu sûr (Drive, clé USB…).";
+  toast("Données exportées ✓");
+};
+document.getElementById("importBtn").onclick = ()=> document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.categories)) throw new Error("format invalide");
+      if(!confirm("Remplacer toutes les données actuelles par celles du fichier ?\nCette action est irréversible.")) return;
+      state = data;
+      migrate();        // garantit la présence des champs récents
+      save(); render();
+      document.getElementById("backupInfo").innerHTML = "✅ Données importées avec succès.";
+      toast("Données importées ✓");
+    }catch(err){
+      document.getElementById("backupInfo").innerHTML = "❌ Fichier invalide : " + err.message;
+      toast("Import impossible");
+    }finally{
+      e.target.value = "";   // permet de réimporter le même fichier ensuite
+    }
+  };
+  reader.readAsText(file);
+};
 
 /* ============================================================
    RENDER GLOBAL
