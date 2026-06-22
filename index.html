@@ -354,6 +354,11 @@ function save(){
 
 /* Migrations — assure la compatibilité des anciennes données */
 function migrate(){
+  if(!state || typeof state!=="object") state = defaultState();
+  // garde-fou : des catégories valides doivent toujours exister
+  if(!Array.isArray(state.categories) || state.categories.length===0)
+    state.categories = structuredClone(DEFAULT_CATS);
+  if(!Array.isArray(state.expenses)) state.expenses = [];
   if(!state.snapshots) state.snapshots = {};
   if(state.usualSalary==null) state.usualSalary = state.salary || 0;
   if(!state.surplusRule) state.surplusRule = "proportional";
@@ -892,8 +897,43 @@ function renderSavings(){
 /* ============================================================
    TABLEAU DE BORD
    ============================================================ */
+/* ---- Récupération d'anciennes données locales (changement d'adresse) ---- */
+let recoveryDismissed = false;
+function oldLocalData(){
+  try{
+    const raw = localStorage.getItem("budgetflow.v1");
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    if(!d || typeof d!=="object") return null;
+    const hasData = (d.salary>0) || (Array.isArray(d.expenses)&&d.expenses.length) ||
+                    (Array.isArray(d.goals)&&d.goals.length) || (Array.isArray(d.savings)&&d.savings.length) ||
+                    (Array.isArray(d.recurring)&&d.recurring.length);
+    return hasData ? d : null;
+  }catch(e){ return null; }
+}
+function recoveryBannerHtml(){
+  if(recoveryDismissed || !oldLocalData()) return "";
+  return `<div class="card" style="border-color:var(--accent2)">
+    <h2>↩️ Anciennes données détectées sur cet appareil</h2>
+    <p class="muted small" style="margin-bottom:12px">On a trouvé un budget enregistré précédemment sur ce navigateur
+      (salaire, catégories, objectifs…). Voulez-vous le récupérer dans votre compte ? Il sera ensuite synchronisé dans le cloud.</p>
+    <div class="inline-actions">
+      <button class="btn" id="recoverBtn">↩️ Récupérer mes données</button>
+      <button class="btn ghost" id="recoverDismiss">Ignorer</button>
+    </div></div>`;
+}
+function doRecover(){
+  const d = oldLocalData();
+  if(!d){ recoveryDismissed=true; renderDash(); return; }
+  if(!confirm("Récupérer vos anciennes données et remplacer le contenu actuel ?")) return;
+  state = d; migrate(); recoveryDismissed = true;
+  save(); render(); gotoTab("dash");
+  toast("Données récupérées ✓");
+}
+
 function renderDash(){
   const root = document.getElementById("dash-content");
+  const recov = recoveryBannerHtml();
 
   const isCurrent = (viewMonth === todayKey());
   const cfg = configForMonth(viewMonth);
@@ -910,7 +950,7 @@ function renderDash(){
     </div>`;
 
   if(!cfg.salary){
-    root.innerHTML = nav + `<div class="card"><div class="empty">
+    root.innerHTML = recov + nav + `<div class="card"><div class="empty">
       ${isCurrent
         ? `👋 Bienvenue ! Commencez par renseigner votre salaire dans l'onglet <b>⚙️ Répartition</b>.`
         : `Aucune donnée pour ${monthLabel(viewMonth)}.`}</div></div>`;
@@ -965,7 +1005,7 @@ function renderDash(){
   }
 
   /* --- HERO stats --- */
-  let html = nav + banner + `<div class="hero">
+  let html = recov + nav + banner + `<div class="hero">
     <div class="stat"><div class="k">Salaire</div><div class="v">${fmt(cfg.salary)}</div></div>
     <div class="stat"><div class="k">Dépensé</div><div class="v">${fmt(totalSpent)}</div></div>
     <div class="stat"><div class="k">${isCurrent?"Disponible":"Resté disponible"}</div><div class="v ${totalLeft>=0?'green':''}" style="${totalLeft<0?'color:var(--danger)':''}">${fmt(totalLeft)}</div></div>
@@ -1050,6 +1090,12 @@ function bindMonthNav(){
   const neu  = document.getElementById("newRepart");
   if(keep) keep.onclick = ()=>{ confirmMonth(viewMonth); toast("Répartition conservée ✓"); renderDash(); };
   if(neu)  neu.onclick  = ()=>{ confirmMonth(viewMonth); toast("Ajustez la répartition de ce mois ✏️"); gotoTab("config"); };
+
+  // Récupération d'anciennes données
+  const rec = document.getElementById("recoverBtn");
+  const recX = document.getElementById("recoverDismiss");
+  if(rec) rec.onclick = doRecover;
+  if(recX) recX.onclick = ()=>{ recoveryDismissed = true; renderDash(); };
 }
 
 /* ============================================================
@@ -1100,7 +1146,9 @@ async function cloudLoad(){
   const { data, error } = await db.from("budgets")
     .select("data").eq("user_id", currentUser.id).maybeSingle();
   if(error) throw error;
-  return data ? data.data : null;
+  // une fiche vide {} est considérée comme « pas de données »
+  const d = data ? data.data : null;
+  return (d && typeof d==="object" && Object.keys(d).length) ? d : null;
 }
 
 /* ============================================================
