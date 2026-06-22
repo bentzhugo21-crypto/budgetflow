@@ -95,6 +95,20 @@
   footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   .inline-actions{display:flex;gap:8px;flex-wrap:wrap}
   @media(max-width:560px){.logo{font-size:18px}.stat .v{font-size:22px}}
+  /* Compte / synchro */
+  .account{display:flex;align-items:center;gap:10px}
+  .sync{font-size:12px;color:var(--muted);white-space:nowrap}
+  .sync.ok{color:var(--accent2)} .sync.saving{color:var(--warn)} .sync.off{color:var(--danger)}
+  /* Écran de connexion */
+  .auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;
+    padding:20px;z-index:100}
+  .auth-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:28px 24px;width:100%;max-width:380px;animation:fade .3s ease}
+  .auth-card label{margin-bottom:6px}
+  .auth-msg{font-size:13px;margin-top:10px;min-height:18px}
+  .auth-msg.err{color:var(--danger)} .auth-msg.ok{color:var(--accent2)}
+  body.authed .auth-screen{display:none}
+  body:not(.authed) .app{display:none}
 </style>
 </head>
 <body>
@@ -108,6 +122,10 @@
       <button data-view="savings">💰 Épargne</button>
       <button data-view="goals">🎯 Objectifs</button>
     </nav>
+    <div class="account">
+      <span id="syncStatus" class="sync" title="État de la synchronisation"></span>
+      <button class="btn ghost sm" id="logoutBtn">Déconnexion</button>
+    </div>
   </header>
 
   <!-- ============ DASHBOARD ============ -->
@@ -160,6 +178,19 @@
           <button class="btn sm" id="savePct">Enregistrer la répartition</button>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>💾 Sauvegarde des données <span class="sub">export / import</span></h2>
+      <p class="muted small" style="margin-bottom:12px">
+        Vos données sont stockées dans ce navigateur uniquement. Exportez-les régulièrement dans un fichier
+        pour les conserver, ou les transférer sur un autre appareil.</p>
+      <div class="inline-actions">
+        <button class="btn" id="exportBtn">⬇️ Exporter mes données</button>
+        <button class="btn ghost" id="importBtn">⬆️ Importer un fichier</button>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      </div>
+      <div id="backupInfo" class="muted small" style="margin-top:10px"></div>
     </div>
   </section>
 
@@ -257,11 +288,28 @@
     <div id="savingsList"></div>
   </section>
 
-  <footer>BudgetFlow — vos données restent privées, stockées uniquement dans ce navigateur.</footer>
+  <footer>BudgetFlow — vos données sont synchronisées en sécurité sur votre compte (Supabase).</footer>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<!-- ============ ÉCRAN DE CONNEXION ============ -->
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="logo" style="justify-content:center;margin-bottom:6px"><span class="mark">💸</span> BudgetFlow</div>
+    <p class="muted small" style="text-align:center;margin-bottom:18px">Connectez-vous pour retrouver votre budget sur tous vos appareils.</p>
+    <label>Email</label>
+    <input type="email" id="authEmail" placeholder="vous@email.com" autocomplete="email">
+    <label style="margin-top:10px">Mot de passe</label>
+    <input type="password" id="authPass" placeholder="••••••••" autocomplete="current-password">
+    <div id="authMsg" class="auth-msg"></div>
+    <button class="btn" id="authLogin" style="width:100%;margin-top:14px">Se connecter</button>
+    <button class="btn ghost" id="authSignup" style="width:100%;margin-top:8px">Créer un compte</button>
+    <p class="muted small" style="text-align:center;margin-top:14px">Vos données sont privées et chiffrées côté serveur.</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============================================================
    BudgetFlow — MVP (vanilla JS, localStorage)
@@ -284,39 +332,59 @@ const DEFAULT_CATS = [
   {id:uid(), icon:"❤️", name:"Santé",          pct:5},
 ];
 
-let state = load();
+/* ---------- Supabase : authentification + sauvegarde cloud ---------- */
+const SUPA_URL = "https://ethpmyraalnzrfdwawrg.supabase.co";
+const SUPA_KEY = "sb_publishable_TlI3bjZSVUt2dyJe0BtXrw_C5HXki7T";
+const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+let currentUser = null;
 
-function load(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
+let state = null;                 // chargé après connexion
+let viewMonth = todayKey();       // mois affiché au tableau de bord
+
+function defaultState(){
   return { salary:0, usualSalary:0, surplusRule:"proportional", payday:1,
            categories:structuredClone(DEFAULT_CATS), expenses:[], goals:[], savings:[],
            recurring:[], recurringAppliedMonths:[], snapshots:{} };
 }
-function save(){ snapshotCurrentMonth(); localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
-
-if(!state.snapshots) state.snapshots = {};   // migration anciennes données
-if(state.usualSalary==null) state.usualSalary = state.salary || 0;
-if(!state.surplusRule) state.surplusRule = "proportional";
-if(!state.recurring) state.recurring = [];
-if(!state.recurringAppliedMonths) state.recurringAppliedMonths = [];
-if(!state.savings) state.savings = [];
-// Migration : ajoute la catégorie "Factures" si absente (5% pris au Logement)
-if(!state.facturesAdded){
-  state.facturesAdded = true;
-  if(!state.categories.some(c => /facture/i.test(c.name))){
-    const log = state.categories.find(c => /logement/i.test(c.name));
-    let pct = 5;
-    if(log && log.pct >= 5) log.pct -= 5; else pct = 0;
-    const idx = log ? state.categories.indexOf(log)+1 : state.categories.length;
-    state.categories.splice(idx, 0, {id:uid(), icon:"💡", name:"Factures", pct});
-  }
+function cacheKey(){ return "budgetflow.cache." + (currentUser ? currentUser.id : "anon"); }
+function loadCache(){
+  try{ const raw = localStorage.getItem(cacheKey()); if(raw) return JSON.parse(raw); }catch(e){}
+  return null;
 }
-// Mois dont la répartition a déjà été confirmée (sinon on propose un choix au nouveau mois)
-if(!state.confirmedMonths) state.confirmedMonths = state.salary>0 ? [todayKey()] : [];
-let viewMonth = todayKey();                   // mois affiché au tableau de bord
+function migrateOldLocal(){   // récupère d'anciennes données locales lors de la 1ʳᵉ connexion
+  try{ const raw = localStorage.getItem("budgetflow.v1"); if(raw) return JSON.parse(raw); }catch(e){}
+  return null;
+}
+
+/* Sauvegarde : cache local immédiat + synchro cloud différée */
+function save(){
+  if(!state) return;
+  snapshotCurrentMonth();
+  try{ localStorage.setItem(cacheKey(), JSON.stringify(state)); }catch(e){}
+  scheduleCloudSave();
+}
+
+/* Migrations — assure la compatibilité des anciennes données */
+function migrate(){
+  if(!state.snapshots) state.snapshots = {};
+  if(state.usualSalary==null) state.usualSalary = state.salary || 0;
+  if(!state.surplusRule) state.surplusRule = "proportional";
+  if(!state.recurring) state.recurring = [];
+  if(!state.recurringAppliedMonths) state.recurringAppliedMonths = [];
+  if(!state.savings) state.savings = [];
+  if(!state.goals) state.goals = [];
+  if(!state.facturesAdded){
+    state.facturesAdded = true;
+    if(!state.categories.some(c => /facture/i.test(c.name))){
+      const log = state.categories.find(c => /logement/i.test(c.name));
+      let pct = 5;
+      if(log && log.pct >= 5) log.pct -= 5; else pct = 0;
+      const idx = log ? state.categories.indexOf(log)+1 : state.categories.length;
+      state.categories.splice(idx, 0, {id:uid(), icon:"💡", name:"Factures", pct});
+    }
+  }
+  if(!state.confirmedMonths) state.confirmedMonths = state.salary>0 ? [todayKey()] : [];
+}
 
 function confirmMonth(key){
   if(!state.confirmedMonths.includes(key)) state.confirmedMonths.push(key);
@@ -997,6 +1065,46 @@ function bindMonthNav(){
 }
 
 /* ============================================================
+   SAUVEGARDE — export / import des données
+   ============================================================ */
+document.getElementById("exportBtn").onclick = ()=>{
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "budgetflow-sauvegarde-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  document.getElementById("backupInfo").innerHTML = "✅ Fichier exporté. Conservez-le en lieu sûr (Drive, clé USB…).";
+  toast("Données exportées ✓");
+};
+document.getElementById("importBtn").onclick = ()=> document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.categories)) throw new Error("format invalide");
+      if(!confirm("Remplacer toutes les données actuelles par celles du fichier ?\nCette action est irréversible.")) return;
+      state = data;
+      migrate();        // garantit la présence des champs récents
+      save(); render();
+      document.getElementById("backupInfo").innerHTML = "✅ Données importées avec succès.";
+      toast("Données importées ✓");
+    }catch(err){
+      document.getElementById("backupInfo").innerHTML = "❌ Fichier invalide : " + err.message;
+      toast("Import impossible");
+    }finally{
+      e.target.value = "";   // permet de réimporter le même fichier ensuite
+    }
+  };
+  reader.readAsText(file);
+};
+
+/* ============================================================
    RENDER GLOBAL
    ============================================================ */
 function render(){
@@ -1015,10 +1123,104 @@ function render(){
   renderDash();
   save();
 }
-applyRecurring();             // pré-remplit les prélèvements du mois en cours
-applyGoalContributions();     // crédite les objectifs liés à une catégorie
-applySavingContributions();   // crédite les épargnes liées à une catégorie
-render();
+/* ============================================================
+   SYNCHRONISATION CLOUD (Supabase)
+   ============================================================ */
+let saveTimer = null;
+function setSync(s){
+  const el = document.getElementById("syncStatus"); if(!el) return;
+  if(s==="ok"){ el.textContent="✓ Sauvegardé"; el.className="sync ok"; }
+  else if(s==="saving"){ el.textContent="⏳ Sauvegarde…"; el.className="sync saving"; }
+  else if(s==="off"){ el.textContent="⚠️ Hors ligne"; el.className="sync off"; }
+}
+function scheduleCloudSave(){
+  if(!currentUser) return;
+  setSync("saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(cloudSave, 800);   // regroupe les modifs rapprochées
+}
+async function cloudSave(){
+  if(!currentUser || !state) return;
+  try{
+    const { error } = await db.from("budgets")
+      .upsert({ user_id: currentUser.id, data: state, updated_at: new Date().toISOString() });
+    if(error) throw error;
+    setSync("ok");
+  }catch(e){ setSync("off"); }
+}
+async function cloudLoad(){
+  const { data, error } = await db.from("budgets")
+    .select("data").eq("user_id", currentUser.id).maybeSingle();
+  if(error) throw error;
+  return data ? data.data : null;
+}
+
+/* ============================================================
+   DÉMARRAGE DE L'APP (après connexion)
+   ============================================================ */
+let booted = false;
+async function bootApp(){
+  let loaded = null;
+  try{ loaded = await cloudLoad(); setSync("ok"); }
+  catch(e){ setSync("off"); }                                   // table absente / hors ligne
+  state = loaded || loadCache() || migrateOldLocal() || defaultState();
+  migrate();
+  applyRecurring();
+  applyGoalContributions();
+  applySavingContributions();
+  render();                                                     // déclenche cache + 1er upsert
+  booted = true;
+}
+
+/* ============================================================
+   AUTHENTIFICATION
+   ============================================================ */
+function authMsg(txt, cls=""){ const el=document.getElementById("authMsg"); if(el){ el.textContent=txt; el.className="auth-msg "+cls; } }
+function traduireAuth(msg){
+  if(/invalid login/i.test(msg)) return "Email ou mot de passe incorrect.";
+  if(/already registered|already been registered|user already/i.test(msg)) return "Cet email a déjà un compte — connectez-vous.";
+  if(/rate limit/i.test(msg)) return "Trop de tentatives. Attendez quelques minutes et réessayez.";
+  if(/sending|confirmation email|smtp/i.test(msg)) return "Souci d'envoi de l'email de confirmation. Désactivez « Confirm email » dans Supabase (Authentication → Providers → Email).";
+  if(/signups? (are )?disabled|signups not allowed/i.test(msg)) return "Les inscriptions sont désactivées dans Supabase (Authentication → Sign In / Up → activez « Allow new users to sign up »).";
+  if(/not confirmed/i.test(msg)) return "Email pas encore confirmé — cliquez le lien reçu par email, puis connectez-vous.";
+  if(/at least|password.*(short|6)/i.test(msg)) return "Mot de passe trop court (6 caractères minimum).";
+  return "Erreur : " + msg;   // message brut pour diagnostic
+}
+document.getElementById("authLogin").onclick = async ()=>{
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPass").value;
+  if(!email || !password){ authMsg("Renseignez email et mot de passe.","err"); return; }
+  authMsg("Connexion…");
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  if(error) authMsg(traduireAuth(error.message),"err");
+};
+document.getElementById("authSignup").onclick = async ()=>{
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPass").value;
+  if(!email || password.length<6){ authMsg("Mot de passe : 6 caractères minimum.","err"); return; }
+  authMsg("Création du compte…");
+  const { data, error } = await db.auth.signUp({ email, password });
+  if(error){ authMsg(traduireAuth(error.message),"err"); return; }
+  if(!data.session){ authMsg("Compte créé ! Vérifiez votre email pour le confirmer, puis connectez-vous.","ok"); return; }
+  // sinon la connexion est automatique (onAuthStateChange prend le relais)
+};
+document.getElementById("logoutBtn").onclick = async ()=>{
+  await cloudSave();
+  await db.auth.signOut();
+};
+
+/* Réagit à la session : connexion → app, déconnexion → écran de connexion */
+db.auth.onAuthStateChange(async (event, session)=>{
+  if(session && session.user){
+    currentUser = session.user;
+    document.body.classList.add("authed");
+    if(!booted) await bootApp();
+  }else{
+    currentUser = null; booted = false; state = null;
+    document.body.classList.remove("authed");
+    authMsg("");
+  }
+});
 </script>
 </body>
 </html>
