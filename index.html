@@ -1256,8 +1256,11 @@ document.getElementById("authSignup").onclick = async ()=>{
   // sinon la connexion est automatique (onAuthStateChange prend le relais)
 };
 document.getElementById("logoutBtn").onclick = async ()=>{
-  await cloudSave();
-  await db.auth.signOut();
+  cloudSave();                                   // dernière sauvegarde (sans bloquer)
+  try{ await db.auth.signOut({ scope: "local" }); }catch(e){}  // déconnexion locale instantanée
+  currentUser = null; booted = false; state = null;
+  document.body.classList.remove("authed");
+  location.reload();                             // retour propre à l'écran de connexion
 };
 
 /* Réagit à la session : connexion → app, déconnexion → écran de connexion */
