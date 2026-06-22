@@ -1,0 +1,6 @@
+# Outils de développement local (non nécessaires au site)
+.claude/
+
+# Système
+Thumbs.db
+.DS_Store

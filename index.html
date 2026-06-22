@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BudgetFlow — Mon budget automatique</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#1a2030; --card2:#232b3e; --line:#2c3650;
+    --text:#e8edf6; --muted:#9aa6bf; --accent:#4f7cff; --accent2:#34d399;
+    --warn:#fbbf24; --danger:#f87171; --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:22px;letter-spacing:.3px}
+  .logo .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;font-size:18px}
+  .tabs{display:flex;gap:6px;background:var(--card);padding:6px;border-radius:14px;border:1px solid var(--line);flex-wrap:wrap}
+  .tabs button{background:transparent;border:0;color:var(--muted);font-weight:600;font-size:14px;
+    padding:9px 14px;border-radius:10px;cursor:pointer;transition:.15s}
+  .tabs button:hover{color:var(--text)}
+  .tabs button.active{background:var(--accent);color:#fff}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+  .card h2{font-size:16px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card h2 .sub{font-size:12px;color:var(--muted);font-weight:500;margin-left:auto}
+  .grid{display:grid;gap:12px}
+  .grid.cols2{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  .grid.cols3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+  input,select{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+    padding:11px 12px;border-radius:10px;font-size:15px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .btn{background:var(--accent);color:#fff;border:0;padding:11px 16px;border-radius:10px;font-weight:700;
+    font-size:14px;cursor:pointer;transition:.15s;font-family:inherit}
+  .btn:hover{filter:brightness(1.1)}
+  .btn.ghost{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+  .btn.sm{padding:7px 11px;font-size:13px}
+  .btn.danger{background:transparent;color:var(--danger);border:1px solid transparent;padding:6px 9px}
+  .btn.danger:hover{border-color:var(--danger)}
+  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .row > *{flex:1;min-width:140px}
+  .row .grow0{flex:0}
+  .hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .stat{background:linear-gradient(160deg,var(--card2),var(--card));border:1px solid var(--line);
+    border-radius:14px;padding:16px}
+  .stat .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+  .stat .v{font-size:26px;font-weight:800;margin-top:4px}
+  .stat .v.green{color:var(--accent2)} .stat .v.blue{color:#7aa2ff}
+  .catline{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .catline:last-child{border-bottom:0}
+  .catline .ic{font-size:20px;width:30px;text-align:center}
+  .catline .nm{font-weight:700;font-size:14px}
+  .catline .meta{font-size:12px;color:var(--muted)}
+  .catline .amt{margin-left:auto;text-align:right;font-weight:700;white-space:nowrap}
+  .catline .amt small{display:block;font-weight:500;color:var(--muted)}
+  .bar{height:7px;background:var(--card2);border-radius:99px;overflow:hidden;margin-top:7px}
+  .bar > i{display:block;height:100%;border-radius:99px;background:var(--accent2);transition:width .4s}
+  .bar > i.warn{background:var(--warn)} .bar > i.danger{background:var(--danger)}
+  .progressrow{margin-bottom:14px}
+  .progressrow:last-child{margin-bottom:0}
+  .progressrow .top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+  .pct-table{width:100%;border-collapse:collapse}
+  .pct-table td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .pct-table input{width:90px;text-align:right}
+  .pct-foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700}
+  .pill.ok{background:rgba(52,211,153,.15);color:var(--accent2)}
+  .pill.bad{background:rgba(248,113,113,.15);color:var(--danger)}
+  .alert{display:flex;gap:10px;align-items:flex-start;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);
+    padding:11px 13px;border-radius:12px;margin-bottom:10px;font-size:13px}
+  .alert.danger{background:rgba(248,113,113,.1);border-color:rgba(248,113,113,.3)}
+  .alert.tip{background:rgba(79,124,255,.1);border-color:rgba(79,124,255,.3)}
+  .alert .ic{font-size:16px}
+  .explist{font-size:14px}
+  .exp{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .exp:last-child{border-bottom:0}
+  .exp .ic{font-size:17px}
+  .exp .lbl{font-weight:600}
+  .exp .dt{font-size:12px;color:var(--muted)}
+  .exp .am{margin-left:auto;font-weight:700;color:var(--danger)}
+  .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:14px}
+  .muted{color:var(--muted)} .small{font-size:12px}
+  .daycard{background:linear-gradient(135deg,rgba(79,124,255,.18),rgba(52,211,153,.12));
+    border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+  .daycard .big{font-size:34px;font-weight:800;color:#fff}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent2);
+    color:#04210f;font-weight:700;padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.3s;z-index:50}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
+  .inline-actions{display:flex;gap:8px;flex-wrap:wrap}
+  @media(max-width:560px){.logo{font-size:18px}.stat .v{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo"><span class="mark">💸</span> BudgetFlow</div>
+    <nav class="tabs" id="tabs">
+      <button data-view="dash" class="active">📊 Tableau de bord</button>
+      <button data-view="config">⚙️ Répartition</button>
+      <button data-view="expenses">🧾 Dépenses</button>
+      <button data-view="savings">💰 Épargne</button>
+      <button data-view="goals">🎯 Objectifs</button>
+    </nav>
+  </header>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="view active" id="view-dash">
+    <div id="dash-content"></div>
+  </section>
+
+  <!-- ============ CONFIG ============ -->
+  <section class="view" id="view-config">
+    <div class="card">
+      <h2>💰 Mon salaire <span class="sub">budget dynamique</span></h2>
+      <div class="row">
+        <div>
+          <label>Salaire habituel (référence €)</label>
+          <input type="number" id="usualInput" min="0" step="10" placeholder="2000">
+        </div>
+        <div>
+          <label>Salaire ce mois (€)</label>
+          <input type="number" id="salaryInput" min="0" step="10" placeholder="2000">
+        </div>
+        <div class="grow0">
+          <label>Jour de paie</label>
+          <select id="paydayInput"></select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label>Règle pour le surplus (si salaire &gt; habituel)</label>
+          <select id="surplusInput">
+            <option value="proportional">Proportionnel — mêmes pourcentages</option>
+            <option value="savings">Vers l'épargne &amp; l'investissement</option>
+            <option value="custom">Personnalisée (par catégorie)</option>
+          </select>
+        </div>
+        <div class="grow0" style="align-self:flex-end">
+          <button class="btn" id="saveSalary">Enregistrer</button>
+        </div>
+      </div>
+      <div id="surplusInfo" class="muted small" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>📐 Répartition par catégorie <span class="sub" id="pctSub"></span></h2>
+      <table class="pct-table" id="pctTable"></table>
+      <div class="pct-foot">
+        <div><span id="pctTotalPill" class="pill">0 %</span></div>
+        <div class="inline-actions">
+          <button class="btn ghost sm" id="addCatBtn">+ Catégorie</button>
+          <button class="btn ghost sm" id="resetDefaults">Réinitialiser</button>
+          <button class="btn sm" id="savePct">Enregistrer la répartition</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXPENSES ============ -->
+  <section class="view" id="view-expenses">
+    <div class="card">
+      <h2>➕ Ajouter une dépense</h2>
+      <div class="row">
+        <div>
+          <label>Catégorie</label>
+          <select id="expCat"></select>
+        </div>
+        <div>
+          <label>Description</label>
+          <input type="text" id="expLabel" placeholder="Courses, restaurant…">
+        </div>
+        <div class="grow0">
+          <label>Montant (€)</label>
+          <input type="number" id="expAmount" min="0" step="0.5" placeholder="25" style="width:120px">
+        </div>
+        <div class="grow0" style="align-self:flex-end">
+          <button class="btn" id="addExp">Ajouter</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🔁 Prélèvements automatiques <span class="sub">pré-remplis chaque mois</span></h2>
+      <p class="muted small" style="margin-bottom:12px">Loyer, factures, abonnements… ajoutés automatiquement à chaque nouveau mois.</p>
+      <div class="row">
+        <div>
+          <label>Catégorie</label>
+          <select id="recCat"></select>
+        </div>
+        <div>
+          <label>Libellé</label>
+          <input type="text" id="recLabel" placeholder="Loyer, EDF, Internet…">
+        </div>
+        <div class="grow0">
+          <label>Montant (€)</label>
+          <input type="number" id="recAmount" min="0" step="1" placeholder="600" style="width:120px">
+        </div>
+        <div class="grow0" style="align-self:flex-end">
+          <button class="btn" id="addRec">Ajouter</button>
+        </div>
+      </div>
+      <div class="explist" id="recList" style="margin-top:6px"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧾 Historique du mois <span class="sub" id="expMonthLabel"></span></h2>
+      <div class="explist" id="expList"></div>
+    </div>
+  </section>
+
+  <!-- ============ GOALS ============ -->
+  <section class="view" id="view-goals">
+    <div class="card">
+      <h2>🎯 Nouvel objectif</h2>
+      <div class="row">
+        <div class="grow0"><label>Emoji</label><input type="text" id="goalIcon" value="✈️" style="width:70px;text-align:center"></div>
+        <div><label>Nom</label><input type="text" id="goalName" placeholder="Voyage au Japon"></div>
+        <div class="grow0"><label>Objectif (€)</label><input type="number" id="goalTarget" min="0" step="50" placeholder="3000" style="width:120px"></div>
+        <div class="grow0"><label>Déjà épargné (€)</label><input type="number" id="goalSaved" min="0" step="50" placeholder="0" style="width:130px"></div>
+        <div><label>Alimenté chaque mois par</label><select id="goalCat"></select></div>
+        <div class="grow0" style="align-self:flex-end"><button class="btn" id="addGoal">Créer</button></div>
+      </div>
+    </div>
+    <div id="goalsList"></div>
+  </section>
+
+  <!-- ============ ÉPARGNE ============ -->
+  <section class="view" id="view-savings">
+    <div id="savingsTotal"></div>
+    <div class="card">
+      <h2>➕ Nouvelle épargne <span class="sub">Livret A, assurance-vie, ETF…</span></h2>
+      <div class="row">
+        <div class="grow0"><label>Emoji</label><input type="text" id="savIcon" value="🏦" style="width:70px;text-align:center"></div>
+        <div><label>Nom</label><input type="text" id="savName" placeholder="Livret A"></div>
+        <div class="grow0"><label>Type</label>
+          <select id="savType">
+            <option>Fonds d'urgence</option>
+            <option>Livret A</option>
+            <option>Assurance-vie</option>
+            <option>ETF / Bourse</option>
+            <option>Immobilier</option>
+            <option>Crypto</option>
+            <option>Autre</option>
+          </select>
+        </div>
+        <div class="grow0"><label>Solde actuel (€)</label><input type="number" id="savBalance" min="0" step="50" placeholder="0" style="width:130px"></div>
+        <div><label>Alimentée chaque mois par</label><select id="savCat"></select></div>
+        <div class="grow0" style="align-self:flex-end"><button class="btn" id="addSav">Ajouter</button></div>
+      </div>
+    </div>
+    <div id="savingsList"></div>
+  </section>
+
+  <footer>BudgetFlow — vos données restent privées, stockées uniquement dans ce navigateur.</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   BudgetFlow — MVP (vanilla JS, localStorage)
+   ============================================================ */
+const STORE_KEY = "budgetflow.v1";
+const fmt = n => (Math.round(n*100)/100).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:0}) + " €";
+const fmt2 = n => (Math.round(n*100)/100).toLocaleString("fr-FR",{minimumFractionDigits:0,maximumFractionDigits:2}) + " €";
+const uid = () => Math.random().toString(36).slice(2,9);
+const todayKey = () => new Date().toISOString().slice(0,7); // YYYY-MM
+
+const DEFAULT_CATS = [
+  {id:uid(), icon:"🏠", name:"Logement",      pct:25},
+  {id:uid(), icon:"💡", name:"Factures",      pct:5},
+  {id:uid(), icon:"🍔", name:"Nourriture",    pct:15},
+  {id:uid(), icon:"📈", name:"Investissement",pct:15},
+  {id:uid(), icon:"💰", name:"Épargne",        pct:10},
+  {id:uid(), icon:"🎉", name:"Loisirs",        pct:10},
+  {id:uid(), icon:"✈️", name:"Voyage",         pct:10},
+  {id:uid(), icon:"🚗", name:"Transport",      pct:5},
+  {id:uid(), icon:"❤️", name:"Santé",          pct:5},
+];
+
+let state = load();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { salary:0, usualSalary:0, surplusRule:"proportional", payday:1,
+           categories:structuredClone(DEFAULT_CATS), expenses:[], goals:[], savings:[],
+           recurring:[], recurringAppliedMonths:[], snapshots:{} };
+}
+function save(){ snapshotCurrentMonth(); localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+
+if(!state.snapshots) state.snapshots = {};   // migration anciennes données
+if(state.usualSalary==null) state.usualSalary = state.salary || 0;
+if(!state.surplusRule) state.surplusRule = "proportional";
+if(!state.recurring) state.recurring = [];
+if(!state.recurringAppliedMonths) state.recurringAppliedMonths = [];
+if(!state.savings) state.savings = [];
+// Migration : ajoute la catégorie "Factures" si absente (5% pris au Logement)
+if(!state.facturesAdded){
+  state.facturesAdded = true;
+  if(!state.categories.some(c => /facture/i.test(c.name))){
+    const log = state.categories.find(c => /logement/i.test(c.name));
+    let pct = 5;
+    if(log && log.pct >= 5) log.pct -= 5; else pct = 0;
+    const idx = log ? state.categories.indexOf(log)+1 : state.categories.length;
+    state.categories.splice(idx, 0, {id:uid(), icon:"💡", name:"Factures", pct});
+  }
+}
+// Mois dont la répartition a déjà été confirmée (sinon on propose un choix au nouveau mois)
+if(!state.confirmedMonths) state.confirmedMonths = state.salary>0 ? [todayKey()] : [];
+let viewMonth = todayKey();                   // mois affiché au tableau de bord
+
+function confirmMonth(key){
+  if(!state.confirmedMonths.includes(key)) state.confirmedMonths.push(key);
+  save();
+}
+function gotoTab(view){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active", b.dataset.view===view));
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+view).classList.add("active");
+  render();
+}
+
+/* Décale un mois "YYYY-MM" de delta mois (calcul en UTC pour éviter les décalages de fuseau) */
+function shiftMonth(key, delta){
+  const [y,m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m-1+delta, 1));
+  return d.toISOString().slice(0,7);
+}
+function monthLabel(key){
+  const [y,m] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m-1, 1)).toLocaleDateString("fr-FR",{month:"long",year:"numeric",timeZone:"UTC"});
+}
+/* Configuration (salaire + catégories) en vigueur pour un mois donné.
+   On utilise l'archive figée si elle existe, sinon les réglages actuels. */
+function configForMonth(key){
+  if(state.snapshots[key]) return state.snapshots[key];
+  return { salary: state.salary, usualSalary: state.usualSalary,
+           surplusRule: state.surplusRule, categories: state.categories };
+}
+/* Archive les réglages courants pour le mois en cours (appelé à chaque sauvegarde). */
+function snapshotCurrentMonth(){
+  state.snapshots[todayKey()] = {
+    salary: state.salary,
+    usualSalary: state.usualSalary,
+    surplusRule: state.surplusRule,
+    categories: structuredClone(state.categories)
+  };
+}
+
+/* BUDGET DYNAMIQUE — répartit le salaire d'un mois.
+   Le salaire de base (jusqu'au salaire habituel) suit les pourcentages.
+   Le surplus éventuel suit la règle choisie. Renvoie { catId: montant }. */
+function computeAllocation(cfg){
+  const usual  = (cfg.usualSalary && cfg.usualSalary>0) ? cfg.usualSalary : (cfg.salary||0);
+  const actual = cfg.salary || 0;
+  const base    = Math.min(actual, usual);
+  const surplus = Math.max(0, actual - usual);
+  const rule    = cfg.surplusRule || "proportional";
+  const out = {};
+  cfg.categories.forEach(c => out[c.id] = base * (c.pct||0)/100);
+
+  if(surplus > 0){
+    if(rule === "savings"){
+      const targets = cfg.categories.filter(c => /épargne|epargne|invest/i.test(c.name));
+      const tot = targets.reduce((s,c)=>s+(c.pct||0),0);
+      if(targets.length && tot>0) targets.forEach(c => out[c.id] += surplus*(c.pct||0)/tot);
+      else cfg.categories.forEach(c => out[c.id] += surplus*(c.pct||0)/100); // repli
+    } else if(rule === "custom"){
+      const tot = cfg.categories.reduce((s,c)=>s+(+c.spct||0),0);
+      if(tot>0) cfg.categories.forEach(c => out[c.id] += surplus*(+c.spct||0)/tot);
+      else cfg.categories.forEach(c => out[c.id] += surplus*(c.pct||0)/100); // repli
+    } else { // proportional
+      cfg.categories.forEach(c => out[c.id] += surplus*(c.pct||0)/100);
+    }
+  }
+  return out;
+}
+function surplusRuleLabel(rule){
+  return rule==="savings" ? "vers l'épargne & l'investissement"
+       : rule==="custom"  ? "répartition personnalisée du surplus"
+       : "proportionnel (mêmes pourcentages)";
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove("show"), 2000);
+}
+
+/* ---------- calculs ---------- */
+function spentInMonth(catId, monthKey){
+  return state.expenses
+    .filter(e => e.catId===catId && e.date.slice(0,7)===monthKey)
+    .reduce((s,e)=>s+e.amount,0);
+}
+/* Ajoute une dépense issue d'un prélèvement automatique pour un mois donné */
+function addRecurringExpense(r, monthKey){
+  const already = state.expenses.some(e => e.recId===r.id && e.date.slice(0,7)===monthKey);
+  if(already) return;
+  // Date : 1er du mois concerné (en UTC) pour rester dans le bon mois
+  const [y,m] = monthKey.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m-1, 1, 12)).toISOString();
+  state.expenses.unshift({id:uid(), catId:r.catId, amount:r.amount, label:r.label, date:d, recId:r.id});
+}
+/* Au démarrage / nouveau mois : pré-remplit les prélèvements du mois en cours une seule fois */
+function applyRecurring(){
+  const m = todayKey();
+  if(state.recurringAppliedMonths.includes(m)) return;
+  state.recurring.forEach(r => addRecurringExpense(r, m));
+  state.recurringAppliedMonths.push(m);
+}
+
+function daysUntilPayday(){
+  const now = new Date();
+  const pd = Math.min(state.payday, 28);
+  let next = new Date(now.getFullYear(), now.getMonth(), pd);
+  if(next <= now) next = new Date(now.getFullYear(), now.getMonth()+1, pd);
+  const days = Math.ceil((next - now)/(1000*60*60*24));
+  return Math.max(1, days);
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+document.getElementById("tabs").addEventListener("click", e=>{
+  const btn = e.target.closest("button"); if(!btn) return;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active", b===btn));
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById("view-"+btn.dataset.view).classList.add("active");
+  render();
+});
+
+/* ============================================================
+   CONFIG : salaire + payday
+   ============================================================ */
+(function initPayday(){
+  const sel = document.getElementById("paydayInput");
+  for(let d=1; d<=28; d++){ const o=document.createElement("option"); o.value=d; o.textContent=d; sel.appendChild(o); }
+})();
+
+document.getElementById("saveSalary").onclick = ()=>{
+  state.salary = Math.max(0, +document.getElementById("salaryInput").value || 0);
+  state.usualSalary = Math.max(0, +document.getElementById("usualInput").value || 0);
+  state.surplusRule = document.getElementById("surplusInput").value || "proportional";
+  state.payday = +document.getElementById("paydayInput").value || 1;
+  confirmMonth(todayKey()); toast("Salaire enregistré ✓"); render();
+};
+document.getElementById("surplusInput").onchange = (e)=>{
+  state.surplusRule = e.target.value;   // aperçu live (persisté à l'enregistrement)
+  renderPctTable();
+};
+
+/* ---------- répartition (pourcentages) ---------- */
+function renderPctTable(){
+  const tb = document.getElementById("pctTable");
+  const custom = state.surplusRule === "custom";
+  tb.innerHTML = "";
+  // En-tête (avec colonne surplus si règle personnalisée)
+  const head = document.createElement("tr");
+  head.innerHTML = `<td></td><td class="muted small">Catégorie</td>
+    <td class="muted small" style="text-align:right">Budget&nbsp;%</td>
+    ${custom?`<td class="muted small" style="text-align:right">Surplus&nbsp;%</td>`:``}
+    <td class="muted small" style="text-align:right">Montant</td><td></td>`;
+  tb.appendChild(head);
+  state.categories.forEach(c=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="width:34px;font-size:20px">${c.icon}</td>
+      <td><input type="text" data-id="${c.id}" data-f="name" value="${c.name}"></td>
+      <td style="text-align:right"><input type="number" min="0" max="100" step="1" data-id="${c.id}" data-f="pct" value="${c.pct}"></td>
+      ${custom?`<td style="text-align:right"><input type="number" min="0" max="100" step="1" data-id="${c.id}" data-f="spct" value="${c.spct||0}"></td>`:``}
+      <td style="width:130px;text-align:right" class="muted small" id="amt-${c.id}"></td>
+      <td style="width:40px;text-align:right"><button class="btn danger" data-del="${c.id}">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const c = state.categories.find(x=>x.id===inp.dataset.id);
+      if(inp.dataset.f==="pct") c.pct = Math.max(0, +inp.value||0);
+      else if(inp.dataset.f==="spct") c.spct = Math.max(0, +inp.value||0);
+      else c.name = inp.value;
+      updatePctTotals();
+    });
+  });
+  tb.querySelectorAll("[data-del]").forEach(b=>{
+    b.onclick = ()=>{
+      if(state.categories.length<=1) return;
+      state.categories = state.categories.filter(c=>c.id!==b.dataset.del);
+      renderPctTable(); updatePctTotals();
+    };
+  });
+  updatePctTotals();
+}
+function updatePctTotals(){
+  const total = state.categories.reduce((s,c)=>s+(+c.pct||0),0);
+  const pill = document.getElementById("pctTotalPill");
+  let txt = "Total : " + total + " %";
+  if(state.surplusRule==="custom"){
+    const stot = state.categories.reduce((s,c)=>s+(+c.spct||0),0);
+    txt += "  ·  Surplus : " + stot + " %";
+  }
+  pill.textContent = txt;
+  pill.className = "pill " + (total===100 ? "ok":"bad");
+  document.getElementById("pctSub").textContent = state.salary ? "Salaire ce mois : "+fmt(state.salary) : "Définissez votre salaire";
+  const alloc = computeAllocation({salary:state.salary, usualSalary:state.usualSalary, surplusRule:state.surplusRule, categories:state.categories});
+  state.categories.forEach(c=>{
+    const el = document.getElementById("amt-"+c.id);
+    if(el) el.textContent = state.salary ? fmt(alloc[c.id]||0) : "—";
+  });
+  updateSurplusInfo();
+}
+function updateSurplusInfo(){
+  const el = document.getElementById("surplusInfo");
+  if(!el) return;
+  const usual = state.usualSalary||0, actual = state.salary||0;
+  const diff = actual - usual;
+  if(!actual || !usual || diff===0){
+    el.innerHTML = usual ? "✅ Salaire conforme à l'habituel — répartition standard." : "";
+    return;
+  }
+  if(diff>0){
+    el.innerHTML = `📈 Ce mois <b>+${fmt(diff)}</b> par rapport à l'habituel. Surplus réparti : <b>${surplusRuleLabel(state.surplusRule)}</b>.`;
+  } else {
+    el.innerHTML = `📉 Ce mois <b>${fmt(diff)}</b> par rapport à l'habituel. Chaque enveloppe est réduite proportionnellement.`;
+  }
+}
+document.getElementById("addCatBtn").onclick = ()=>{
+  state.categories.push({id:uid(), icon:"🔹", name:"Nouvelle catégorie", pct:0});
+  renderPctTable();
+};
+document.getElementById("resetDefaults").onclick = ()=>{
+  if(confirm("Réinitialiser les catégories par défaut ?")){
+    state.categories = structuredClone(DEFAULT_CATS); renderPctTable();
+  }
+};
+document.getElementById("savePct").onclick = ()=>{
+  const total = state.categories.reduce((s,c)=>s+(+c.pct||0),0);
+  confirmMonth(todayKey());
+  if(total!==100) toast("Enregistré, mais le total fait "+total+"% (≠100%)");
+  else toast("Répartition enregistrée ✓");
+  render();
+};
+
+/* ============================================================
+   DÉPENSES
+   ============================================================ */
+function fillCatSelect(id, preferName){
+  const sel = document.getElementById(id);
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = "";
+  state.categories.forEach(c=>{
+    const o=document.createElement("option"); o.value=c.id; o.textContent=`${c.icon} ${c.name}`; sel.appendChild(o);
+  });
+  // restaure la sélection précédente, sinon présélectionne la catégorie suggérée
+  if(state.categories.some(c=>c.id===prev)) sel.value = prev;
+  else if(preferName){
+    const m = state.categories.find(c=>new RegExp(preferName,"i").test(c.name));
+    if(m) sel.value = m.id;
+  }
+}
+function fillExpCatSelect(){
+  fillCatSelect("expCat");
+  fillCatSelect("recCat", "logement");
+}
+document.getElementById("addExp").onclick = ()=>{
+  const catId = document.getElementById("expCat").value;
+  const amount = +document.getElementById("expAmount").value || 0;
+  const label = document.getElementById("expLabel").value.trim() || "Dépense";
+  if(!catId || amount<=0){ toast("Renseignez une catégorie et un montant"); return; }
+  state.expenses.unshift({id:uid(), catId, amount, label, date:new Date().toISOString()});
+  document.getElementById("expAmount").value=""; document.getElementById("expLabel").value="";
+  save(); toast("Dépense ajoutée ✓"); render();
+};
+
+/* ---------- prélèvements automatiques ---------- */
+document.getElementById("addRec").onclick = ()=>{
+  const catId = document.getElementById("recCat").value;
+  const amount = +document.getElementById("recAmount").value || 0;
+  const label = document.getElementById("recLabel").value.trim() || "Prélèvement";
+  if(!catId || amount<=0){ toast("Renseignez une catégorie et un montant"); return; }
+  const r = {id:uid(), catId, amount, label};
+  state.recurring.push(r);
+  addRecurringExpense(r, todayKey());   // appliqué immédiatement au mois en cours
+  document.getElementById("recAmount").value=""; document.getElementById("recLabel").value="";
+  save(); toast("Prélèvement automatique ajouté ✓"); render();
+};
+function renderRecList(){
+  const wrap = document.getElementById("recList");
+  if(!state.recurring.length){ wrap.innerHTML = `<div class="empty">Aucun prélèvement automatique.</div>`; return; }
+  wrap.innerHTML = "";
+  state.recurring.forEach(r=>{
+    const c = state.categories.find(x=>x.id===r.catId) || {icon:"❔",name:"—"};
+    const div = document.createElement("div"); div.className="exp";
+    div.innerHTML = `<span class="ic">🔁</span>
+      <div><div class="lbl">${r.label}</div><div class="dt">${c.icon} ${c.name} · chaque mois</div></div>
+      <span class="am">-${fmt2(r.amount)}</span>
+      <button class="btn danger" data-del="${r.id}">✕</button>`;
+    div.querySelector("[data-del]").onclick = ()=>{
+      if(confirm("Supprimer ce prélèvement automatique ?\n(Les dépenses déjà enregistrées sont conservées.)")){
+        state.recurring = state.recurring.filter(x=>x.id!==r.id);
+        save(); render();
+      }
+    };
+    wrap.appendChild(div);
+  });
+}
+function renderExpList(){
+  const wrap = document.getElementById("expList");
+  document.getElementById("expMonthLabel").textContent =
+    new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const m = todayKey();
+  const list = state.expenses.filter(e=>e.date.slice(0,7)===m);
+  if(!list.length){ wrap.innerHTML = `<div class="empty">Aucune dépense ce mois-ci.</div>`; return; }
+  wrap.innerHTML = "";
+  list.forEach(e=>{
+    const c = state.categories.find(x=>x.id===e.catId) || {icon:"❔",name:"—"};
+    const div = document.createElement("div");
+    div.className="exp";
+    div.innerHTML = `<span class="ic">${c.icon}</span>
+      <div><div class="lbl">${e.label}${e.recId?' <span title="Prélèvement automatique">🔁</span>':''}</div>
+      <div class="dt">${c.name} · ${new Date(e.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}</div></div>
+      <span class="am">-${fmt2(e.amount)}</span>
+      <button class="btn danger" data-del="${e.id}">✕</button>`;
+    div.querySelector("[data-del]").onclick = ()=>{
+      state.expenses = state.expenses.filter(x=>x.id!==e.id); save(); render();
+    };
+    wrap.appendChild(div);
+  });
+}
+
+/* ============================================================
+   OBJECTIFS
+   ============================================================ */
+/* Remplit le sélecteur "alimenté par" (avec option Aucune) */
+function fillGoalCatSelect(){
+  const sel = document.getElementById("goalCat");
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">— Aucune (manuel) —</option>`;
+  state.categories.forEach(c=>{
+    const o=document.createElement("option"); o.value=c.id; o.textContent=`${c.icon} ${c.name}`; sel.appendChild(o);
+  });
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+/* Crédite un objectif lié avec l'allocation de sa catégorie, une fois par mois, plafonné à l'objectif */
+function creditGoal(g, m, alloc){
+  if(!g.catId) return;
+  if(!g.creditedMonths) g.creditedMonths = [];
+  if(g.creditedMonths.includes(m)) return;
+  if(g.saved >= g.target){ g.creditedMonths.push(m); return; } // déjà atteint
+  const monthly = alloc[g.catId] || 0;
+  if(monthly <= 0) return;                                     // rien à créditer ce mois (on réessaiera)
+  g.saved = Math.min(g.target, g.saved + monthly);
+  g.creditedMonths.push(m);
+}
+function applyGoalContributions(){
+  const m = todayKey();
+  const alloc = computeAllocation(configForMonth(m));
+  state.goals.forEach(g => creditGoal(g, m, alloc));
+}
+
+document.getElementById("addGoal").onclick = ()=>{
+  const name = document.getElementById("goalName").value.trim();
+  const target = +document.getElementById("goalTarget").value||0;
+  const saved = +document.getElementById("goalSaved").value||0;
+  const icon = document.getElementById("goalIcon").value.trim()||"🎯";
+  const catId = document.getElementById("goalCat").value || null;
+  if(!name || target<=0){ toast("Renseignez un nom et un objectif"); return; }
+  state.goals.push({id:uid(), name, target, saved:Math.min(saved,target), icon, catId, creditedMonths:[]});
+  document.getElementById("goalName").value=""; document.getElementById("goalTarget").value="";
+  document.getElementById("goalSaved").value="";
+  applyGoalContributions();   // crédite immédiatement le mois en cours si lié
+  save(); toast("Objectif créé ✓"); render();
+};
+function renderGoals(){
+  const wrap = document.getElementById("goalsList");
+  if(!state.goals.length){
+    wrap.innerHTML = `<div class="card"><div class="empty">Aucun objectif. Créez votre premier rêve à financer ✈️</div></div>`;
+    return;
+  }
+  wrap.innerHTML = "";
+  const alloc = computeAllocation(configForMonth(todayKey()));
+  state.goals.forEach(g=>{
+    const pct = Math.min(100, Math.round(g.saved/g.target*100));
+    const reached = g.saved >= g.target;
+
+    // Ligne d'information sur la catégorie liée
+    let linkInfo = "";
+    if(g.catId){
+      const c = state.categories.find(x=>x.id===g.catId);
+      const monthly = alloc[g.catId] || 0;
+      const remaining = Math.max(0, g.target - g.saved);
+      const label = c ? `${c.icon} ${c.name}` : "catégorie supprimée";
+      if(reached){
+        linkInfo = `<div class="alert tip" style="margin-top:10px"><span class="ic">🎉</span><span>Objectif atteint ! Alimenté par <b>${label}</b>.</span></div>`;
+      } else if(monthly > 0){
+        const months = Math.ceil(remaining / monthly);
+        linkInfo = `<div class="alert tip" style="margin-top:10px"><span class="ic">🔗</span><span>Alimenté automatiquement par <b>${label}</b> · <b>+${fmt(monthly)}/mois</b> · objectif atteint dans <b>~${months} mois</b>.</span></div>`;
+      } else {
+        linkInfo = `<div class="alert" style="margin-top:10px"><span class="ic">🔗</span><span>Lié à <b>${label}</b> — sera alimenté dès qu'un budget y est alloué.</span></div>`;
+      }
+    }
+
+    const card = document.createElement("div"); card.className="card";
+    card.innerHTML = `
+      <div class="progressrow">
+        <div class="top"><span><b style="font-size:18px">${g.icon} ${g.name}</b></span>
+          <span class="muted">${fmt(g.saved)} / ${fmt(g.target)} · <b style="color:var(--accent2)">${pct}%</b></span></div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+      </div>
+      ${linkInfo}
+      <div class="row" style="margin-top:12px">
+        <div class="grow0"><input type="number" min="0" step="10" placeholder="Ajouter €" data-add="${g.id}" style="width:130px"></div>
+        <div class="grow0"><button class="btn sm" data-addbtn="${g.id}">+ Épargner</button></div>
+        <div class="grow0" style="margin-left:auto"><button class="btn danger" data-delgoal="${g.id}">Supprimer</button></div>
+      </div>`;
+    card.querySelector("[data-addbtn]").onclick = ()=>{
+      const inp = card.querySelector(`[data-add="${g.id}"]`);
+      const add = +inp.value||0;
+      g.saved = Math.min(g.target, g.saved + add);
+      save(); toast("Épargne ajoutée ✓"); render();
+    };
+    card.querySelector("[data-delgoal]").onclick = ()=>{
+      if(confirm("Supprimer cet objectif ?")){ state.goals = state.goals.filter(x=>x.id!==g.id); save(); render(); }
+    };
+    wrap.appendChild(card);
+  });
+}
+
+/* ============================================================
+   ÉPARGNE (différents supports : Livret A, assurance-vie, ETF…)
+   ============================================================ */
+function fillSavingCatSelect(){
+  const sel = document.getElementById("savCat");
+  if(!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = `<option value="">— Aucune (manuel) —</option>`;
+  state.categories.forEach(c=>{
+    const o=document.createElement("option"); o.value=c.id; o.textContent=`${c.icon} ${c.name}`; sel.appendChild(o);
+  });
+  if([...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+/* Crédite une épargne liée avec l'allocation de sa catégorie, une fois par mois (sans plafond) */
+function creditSaving(s, m, alloc){
+  if(!s.catId) return;
+  if(!s.creditedMonths) s.creditedMonths = [];
+  if(s.creditedMonths.includes(m)) return;
+  const monthly = alloc[s.catId] || 0;
+  if(monthly <= 0) return;
+  s.balance += monthly;
+  s.creditedMonths.push(m);
+}
+function applySavingContributions(){
+  const m = todayKey();
+  const alloc = computeAllocation(configForMonth(m));
+  state.savings.forEach(s => creditSaving(s, m, alloc));
+}
+
+document.getElementById("addSav").onclick = ()=>{
+  const name = document.getElementById("savName").value.trim();
+  const type = document.getElementById("savType").value;
+  const icon = document.getElementById("savIcon").value.trim() || "🏦";
+  const balance = +document.getElementById("savBalance").value || 0;
+  const catId = document.getElementById("savCat").value || null;
+  if(!name){ toast("Donnez un nom à cette épargne"); return; }
+  state.savings.push({id:uid(), name, type, icon, balance, catId, creditedMonths:[]});
+  document.getElementById("savName").value=""; document.getElementById("savBalance").value="";
+  applySavingContributions();
+  save(); toast("Épargne ajoutée ✓"); render();
+};
+
+function renderSavings(){
+  const totalWrap = document.getElementById("savingsTotal");
+  const wrap = document.getElementById("savingsList");
+  const total = state.savings.reduce((s,x)=>s+x.balance,0);
+  const monthlyTotal = (()=>{
+    const alloc = computeAllocation(configForMonth(todayKey()));
+    return state.savings.reduce((s,x)=> s + (x.catId ? (alloc[x.catId]||0) : 0), 0);
+  })();
+  totalWrap.innerHTML = `<div class="hero">
+    <div class="stat"><div class="k">Patrimoine épargné</div><div class="v green">${fmt(total)}</div></div>
+    <div class="stat"><div class="k">Apport automatique / mois</div><div class="v blue">${fmt(monthlyTotal)}</div></div>
+    <div class="stat"><div class="k">Supports</div><div class="v">${state.savings.length}</div></div>
+  </div>`;
+
+  if(!state.savings.length){
+    wrap.innerHTML = `<div class="card"><div class="empty">Aucune épargne. Ajoutez vos supports : 🛡️ fonds d'urgence, 🏦 Livret A, 📈 assurance-vie…</div></div>`;
+    return;
+  }
+  const alloc = computeAllocation(configForMonth(todayKey()));
+  wrap.innerHTML = "";
+  state.savings.forEach(s=>{
+    const c = s.catId ? state.categories.find(x=>x.id===s.catId) : null;
+    const monthly = s.catId ? (alloc[s.catId]||0) : 0;
+    let linkInfo = "";
+    if(s.catId){
+      const label = c ? `${c.icon} ${c.name}` : "catégorie supprimée";
+      linkInfo = monthly>0
+        ? `<div class="alert tip" style="margin-top:10px"><span class="ic">🔗</span><span>Alimentée automatiquement par <b>${label}</b> · <b>+${fmt(monthly)}/mois</b>.</span></div>`
+        : `<div class="alert" style="margin-top:10px"><span class="ic">🔗</span><span>Liée à <b>${label}</b> — apport dès qu'un budget y est alloué.</span></div>`;
+    }
+    const card = document.createElement("div"); card.className="card";
+    card.innerHTML = `
+      <div class="catline" style="border:0;padding:0">
+        <span class="ic" style="font-size:24px">${s.icon}</span>
+        <div><div class="nm" style="font-size:16px">${s.name}</div><div class="meta">${s.type}</div></div>
+        <div class="amt"><span style="color:var(--accent2);font-size:18px">${fmt(s.balance)}</span></div>
+      </div>
+      ${linkInfo}
+      <div class="row" style="margin-top:12px">
+        <div class="grow0"><input type="number" step="10" placeholder="Montant €" data-amt="${s.id}" style="width:130px"></div>
+        <div class="grow0"><button class="btn sm" data-dep="${s.id}">+ Dépôt</button></div>
+        <div class="grow0"><button class="btn ghost sm" data-wit="${s.id}">− Retrait</button></div>
+        <div class="grow0" style="margin-left:auto"><button class="btn danger" data-delsav="${s.id}">Supprimer</button></div>
+      </div>`;
+    const getAmt = ()=> +card.querySelector(`[data-amt="${s.id}"]`).value || 0;
+    card.querySelector("[data-dep]").onclick = ()=>{ s.balance += getAmt(); save(); toast("Dépôt enregistré ✓"); render(); };
+    card.querySelector("[data-wit]").onclick = ()=>{ s.balance = Math.max(0, s.balance - getAmt()); save(); toast("Retrait enregistré ✓"); render(); };
+    card.querySelector("[data-delsav]").onclick = ()=>{
+      if(confirm("Supprimer cette épargne ?")){ state.savings = state.savings.filter(x=>x.id!==s.id); save(); render(); }
+    };
+    wrap.appendChild(card);
+  });
+}
+
+/* ============================================================
+   TABLEAU DE BORD
+   ============================================================ */
+function renderDash(){
+  const root = document.getElementById("dash-content");
+
+  const isCurrent = (viewMonth === todayKey());
+  const cfg = configForMonth(viewMonth);
+
+  // Navigateur de mois
+  const canNext = (viewMonth < todayKey());
+  const nav = `<div class="card" style="display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn ghost sm" id="prevMonth">◀</button>
+      <div style="text-align:center;flex:1">
+        <div style="font-size:18px;font-weight:800;text-transform:capitalize">${monthLabel(viewMonth)}</div>
+        <div class="muted small">${isCurrent ? "Mois en cours" : "📦 Mois archivé"}${!isCurrent && !state.snapshots[viewMonth] ? " · réglages actuels (pas d'archive figée)" : ""}</div>
+      </div>
+      <button class="btn ghost sm" id="nextMonth" ${canNext?"":"disabled style=\"opacity:.3;cursor:default\""}>▶</button>
+    </div>`;
+
+  if(!cfg.salary){
+    root.innerHTML = nav + `<div class="card"><div class="empty">
+      ${isCurrent
+        ? `👋 Bienvenue ! Commencez par renseigner votre salaire dans l'onglet <b>⚙️ Répartition</b>.`
+        : `Aucune donnée pour ${monthLabel(viewMonth)}.`}</div></div>`;
+    bindMonthNav();
+    return;
+  }
+
+  const days = daysUntilPayday();
+  const allocMap = computeAllocation(cfg);
+  let totalSpent = 0, totalAllocated = 0;
+  const cats = cfg.categories.map(c=>{
+    const alloc = allocMap[c.id] || 0;
+    const spent = spentInMonth(c.id, viewMonth);
+    const left = alloc - spent;
+    totalSpent += spent; totalAllocated += alloc;
+    return {...c, alloc, spent, left};
+  });
+  const totalLeft = totalAllocated - totalSpent;
+
+  /* --- Budget dynamique : écart vs salaire habituel --- */
+  const usual = (cfg.usualSalary && cfg.usualSalary>0) ? cfg.usualSalary : cfg.salary;
+  const diff = cfg.salary - usual;
+  let dyn = "";
+  if(diff !== 0){
+    const up = diff > 0;
+    dyn = `<div class="card" style="border-color:${up?'var(--accent2)':'var(--danger)'}">
+      <h2>${up?'📈':'📉'} Budget dynamique</h2>
+      <div class="muted small">
+        Salaire habituel : <b style="color:var(--text)">${fmt(usual)}</b> ·
+        ce mois : <b style="color:var(--text)">${fmt(cfg.salary)}</b>
+        <span class="pill ${up?'ok':'bad'}" style="margin-left:6px">${up?'+':''}${fmt(diff)}</span>
+      </div>
+      <div class="muted small" style="margin-top:6px">
+        ${up
+          ? `Surplus de <b style="color:var(--text)">${fmt(diff)}</b> redistribué automatiquement — règle : <b style="color:var(--text)">${surplusRuleLabel(cfg.surplusRule)}</b>.`
+          : `Revenu inférieur à l'habituel : chaque enveloppe est réduite proportionnellement.`}
+      </div></div>`;
+  }
+
+  /* --- Bannière "nouveau mois" : proposer de garder ou redéfinir la répartition --- */
+  let banner = "";
+  if(isCurrent && !state.confirmedMonths.includes(viewMonth)){
+    const prevKey = shiftMonth(viewMonth,-1);
+    banner = `<div class="card" style="border-color:var(--accent)">
+      <h2>🆕 Nouveau mois : <span style="text-transform:capitalize">${monthLabel(viewMonth)}</span></h2>
+      <p class="muted small" style="margin-bottom:12px">Vos dépenses repartent à zéro. Voulez-vous conserver la répartition de
+        <b style="text-transform:capitalize">${monthLabel(prevKey)}</b> ou en définir une nouvelle, propre à ce mois ?</p>
+      <div class="inline-actions">
+        <button class="btn" id="keepRepart">♻️ Garder la même</button>
+        <button class="btn ghost" id="newRepart">✏️ Nouvelle répartition pour ce mois</button>
+      </div></div>`;
+  }
+
+  /* --- HERO stats --- */
+  let html = nav + banner + `<div class="hero">
+    <div class="stat"><div class="k">Salaire</div><div class="v">${fmt(cfg.salary)}</div></div>
+    <div class="stat"><div class="k">Dépensé</div><div class="v">${fmt(totalSpent)}</div></div>
+    <div class="stat"><div class="k">${isCurrent?"Disponible":"Resté disponible"}</div><div class="v ${totalLeft>=0?'green':''}" style="${totalLeft<0?'color:var(--danger)':''}">${fmt(totalLeft)}</div></div>
+    ${isCurrent
+      ? `<div class="stat"><div class="k">Prochaine paie</div><div class="v blue">${days} j</div></div>`
+      : `<div class="stat"><div class="k">Taux d'épargne</div><div class="v blue">${totalAllocated>0?Math.round(totalLeft/totalAllocated*100):0} %</div></div>`}
+  </div>`;
+
+  html += dyn;
+
+  /* --- Fonctionnalité différenciante : combien dépenser aujourd'hui ? (mois en cours uniquement) --- */
+  const food = cats.find(c=>/nourriture|alimentation|courses/i.test(c.name)) || cats.find(c=>c.icon==="🍔");
+  if(food && isCurrent){
+    const perDay = Math.max(0, food.left)/days;
+    html += `<div class="card"><h2>💡 Combien puis-je dépenser aujourd'hui ?</h2>
+      <div class="daycard">
+        <div class="muted small">Budget « ${food.icon} ${food.name} » restant : <b style="color:var(--text)">${fmt(food.left)}</b> · ${days} jours avant la paie</div>
+        <div class="big">${fmt2(perDay)} / jour</div>
+        <div class="muted small">C'est ce que vous pouvez dépenser chaque jour pour tenir jusqu'à la prochaine paie.</div>
+      </div></div>`;
+  }
+
+  /* --- Alertes & recommandations --- */
+  const alerts = [];
+  cats.forEach(c=>{
+    if(c.alloc<=0) return;
+    const used = c.spent/c.alloc;
+    if(used>1) alerts.push({type:"danger", icon:"🚨", msg:`Budget <b>${c.name}</b> dépassé de ${fmt(-c.left)}.`});
+    else if(used>=0.85) alerts.push({type:"warn", icon:"⚠️", msg:`Vous avez utilisé ${Math.round(used*100)}% de votre budget <b>${c.name}</b>.`});
+  });
+  // reco simple style "IA"
+  const restoSpent = state.expenses.filter(e=>/resto|restaurant|fast|uber|deliveroo/i.test(e.label)&&e.date.slice(0,7)===viewMonth).reduce((s,e)=>s+e.amount,0);
+  if(restoSpent>0) alerts.push({type:"tip", icon:"🤖", msg:`Vous avez dépensé ${fmt(restoSpent)} en restauration. À ce rythme, soit ~${fmt(restoSpent*12)}/an — réduire de 10% économiserait ${fmt(restoSpent*12*0.1)}/an.`});
+
+  if(alerts.length){
+    html += `<div class="card"><h2>🔔 Alertes & conseils</h2>`;
+    alerts.forEach(a=> html += `<div class="alert ${a.type==='danger'?'danger':a.type==='tip'?'tip':''}"><span class="ic">${a.icon}</span><span>${a.msg}</span></div>`);
+    html += `</div>`;
+  }
+
+  /* --- Détail par catégorie --- */
+  html += `<div class="card"><h2>📂 Mes enveloppes <span class="sub">restant ${isCurrent?"ce mois":"sur le mois"}</span></h2>`;
+  cats.forEach(c=>{
+    const used = c.alloc>0 ? Math.min(100, c.spent/c.alloc*100) : 0;
+    const cls = c.left<0 ? "danger" : used>=85 ? "warn" : "";
+    html += `<div style="padding:12px 0;border-bottom:1px solid var(--line)">
+      <div class="catline" style="border:0;padding:0">
+        <span class="ic">${c.icon}</span>
+        <div><div class="nm">${c.name}</div><div class="meta">${c.pct}% · alloué ${fmt(c.alloc)}</div></div>
+        <div class="amt"><span style="color:${c.left<0?'var(--danger)':'var(--accent2)'}">${fmt(c.left)}</span><small>dépensé ${fmt(c.spent)}</small></div>
+      </div>
+      <div class="bar"><i class="${cls}" style="width:${used}%"></i></div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  /* --- Objectifs résumé --- */
+  if(state.goals.length){
+    html += `<div class="card"><h2>🎯 Objectifs</h2>`;
+    state.goals.forEach(g=>{
+      const pct = Math.min(100, Math.round(g.saved/g.target*100));
+      html += `<div class="progressrow"><div class="top"><span>${g.icon} ${g.name}</span>
+        <span class="muted">${fmt(g.saved)} / ${fmt(g.target)} · ${pct}%</span></div>
+        <div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  root.innerHTML = html;
+  bindMonthNav();
+}
+
+/* Relie les flèches ◀ ▶ du navigateur de mois */
+function bindMonthNav(){
+  const prev = document.getElementById("prevMonth");
+  const next = document.getElementById("nextMonth");
+  if(prev) prev.onclick = ()=>{ viewMonth = shiftMonth(viewMonth,-1); renderDash(); };
+  if(next) next.onclick = ()=>{ if(viewMonth < todayKey()){ viewMonth = shiftMonth(viewMonth,1); renderDash(); } };
+
+  // Bannière nouveau mois
+  const keep = document.getElementById("keepRepart");
+  const neu  = document.getElementById("newRepart");
+  if(keep) keep.onclick = ()=>{ confirmMonth(viewMonth); toast("Répartition conservée ✓"); renderDash(); };
+  if(neu)  neu.onclick  = ()=>{ confirmMonth(viewMonth); toast("Ajustez la répartition de ce mois ✏️"); gotoTab("config"); };
+}
+
+/* ============================================================
+   RENDER GLOBAL
+   ============================================================ */
+function render(){
+  document.getElementById("salaryInput").value = state.salary || "";
+  document.getElementById("usualInput").value = state.usualSalary || "";
+  document.getElementById("surplusInput").value = state.surplusRule || "proportional";
+  document.getElementById("paydayInput").value = state.payday || 1;
+  renderPctTable();
+  fillExpCatSelect();
+  fillGoalCatSelect();
+  fillSavingCatSelect();
+  renderRecList();
+  renderExpList();
+  renderSavings();
+  renderGoals();
+  renderDash();
+  save();
+}
+applyRecurring();             // pré-remplit les prélèvements du mois en cours
+applyGoalContributions();     // crédite les objectifs liés à une catégorie
+applySavingContributions();   // crédite les épargnes liées à une catégorie
+render();
+</script>
+</body>
+</html>
