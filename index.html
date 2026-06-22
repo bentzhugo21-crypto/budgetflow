@@ -32,7 +32,8 @@
     display:grid;place-items:center;box-shadow:0 4px 10px rgba(248,107,77,.3)}
   .tabs{display:flex;gap:6px;background:var(--card);padding:6px;border-radius:14px;border:1px solid var(--line);flex-wrap:wrap}
   .tabs button{background:transparent;border:0;color:var(--muted);font-weight:600;font-size:14px;
-    padding:9px 14px;border-radius:10px;cursor:pointer;transition:.15s}
+    padding:9px 14px;border-radius:10px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+  .tabs button .ic{font-size:15px}
   .tabs button:hover{color:var(--text)}
   .tabs button.active{background:var(--accent);color:#fff}
   .view{display:none;animation:fade .25s ease}
@@ -107,6 +108,19 @@
   footer{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
   .inline-actions{display:flex;gap:8px;flex-wrap:wrap}
   @media(max-width:560px){.logo{font-size:18px}.stat .v{font-size:22px}}
+  /* Téléphone : barre d'onglets fixée en bas, style appli */
+  @media(max-width:620px){
+    .tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;width:100%;border-radius:0;
+      border:0;border-top:1px solid var(--line);background:var(--card);
+      padding:6px 2px;gap:0;justify-content:space-around;flex-wrap:nowrap;
+      box-shadow:0 -3px 14px rgba(60,40,25,.07)}
+    .tabs button{flex:1;flex-direction:column;gap:3px;padding:6px 2px;border-radius:10px}
+    .tabs button .ic{font-size:21px}
+    .tabs button .lb{font-size:10px;font-weight:600}
+    .tabs button.active{background:transparent;color:var(--accent)}
+    .app{padding-bottom:88px}
+    .toast{bottom:86px}
+  }
   /* Compte / synchro */
   .account{display:flex;align-items:center;gap:10px}
   .sync{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -128,11 +142,11 @@
   <header class="top">
     <div class="logo"><span class="mark"><svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><ellipse cx="12" cy="16.4" rx="7.6" ry="2.5" fill="#fff" fill-opacity=".55"/><ellipse cx="12" cy="12.9" rx="7.6" ry="2.5" fill="#fff" fill-opacity=".8"/><ellipse cx="12" cy="9.4" rx="7.6" ry="2.5" fill="#fff"/></svg></span> BudgetFlow</div>
     <nav class="tabs" id="tabs">
-      <button data-view="dash" class="active">📊 Tableau de bord</button>
-      <button data-view="config">⚙️ Répartition</button>
-      <button data-view="expenses">🧾 Dépenses</button>
-      <button data-view="savings">💰 Épargne</button>
-      <button data-view="goals">🎯 Objectifs</button>
+      <button data-view="dash" class="active"><span class="ic">📊</span><span class="lb">Accueil</span></button>
+      <button data-view="config"><span class="ic">⚙️</span><span class="lb">Budget</span></button>
+      <button data-view="expenses"><span class="ic">🧾</span><span class="lb">Dépenses</span></button>
+      <button data-view="savings"><span class="ic">💰</span><span class="lb">Épargne</span></button>
+      <button data-view="goals"><span class="ic">🎯</span><span class="lb">Objectifs</span></button>
     </nav>
     <div class="account">
       <span id="syncStatus" class="sync" title="État de la synchronisation"></span>
@@ -347,7 +361,9 @@ const DEFAULT_CATS = [
 /* ---------- Supabase : authentification + sauvegarde cloud ---------- */
 const SUPA_URL = "https://ethpmyraalnzrfdwawrg.supabase.co";
 const SUPA_KEY = "sb_publishable_TlI3bjZSVUt2dyJe0BtXrw_C5HXki7T";
-const db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+const db = window.supabase.createClient(SUPA_URL, SUPA_KEY, {
+  auth: { storage: window.sessionStorage, persistSession: true, autoRefreshToken: true }
+});
 let currentUser = null;
 
 let state = null;                 // chargé après connexion
